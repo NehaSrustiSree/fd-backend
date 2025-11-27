@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: groceries-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: groceries-backend
+  template:
+    metadata:
+      labels:
+        app: groceries-backend
+    spec:
+      containers:
+        - name: backend
+          image: groceries-backend:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: APP_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: groceries-secrets
+                  key: app.jwt.secret
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: groceries-backend
+spec:
+  selector:
+    app: groceries-backend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
