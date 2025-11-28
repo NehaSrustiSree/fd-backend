@@ -1,72 +1,113 @@
-Groceries Spring Boot Auth Backend
+# Groceries Spring Boot Auth Backend
 
-Prerequisites
-- Java 21
-- Maven 3.9+
-- MySQL running locally
+Spring Boot REST API for the Grocery Go application with JWT authentication, BCrypt password hashing, and MySQL database.
 
-Configure DB and JWT
-- Edit src/main/resources/application.properties:
-  - spring.datasource.username and spring.datasource.password
-  - app.jwt.secret (use a long random string)
-  - app.cors.allowed-origins=http://localhost:5173 (Vite dev)
-- Schema is auto-created via schema.sql and JPA (ddl-auto=update).
+## Quick Start
 
-Database changes
-- A new `credentials` table is created to hold password hashes per-user. The repo includes
-  `src/main/resources/schema.sql` which now contains a `credentials` table with a
-  foreign key to `users(id)`. During signup the backend also creates a credentials record.
+### Docker Compose (Recommended)
+``powershell
+docker compose up --build backend -d
+``
 
-Migration notes
-- If you already have users with `password_hash` in the `users` table, the application
-  will still work (signup writes both `users.password_hash` and `credentials.password_hash`).
-  Consider running a one-time migration to populate `credentials` from `users` and then
-  removing the `password_hash` column from `users` in a future schema cleanup.
+### Maven
+``powershell
+mvn spring-boot:run
+``
 
-Run
-```
-mvn -q spring-boot:run
-```
-Server: http://localhost:8080
+Server runs on: http://localhost:8080
 
-Endpoints
-- POST /api/auth/signup {name,email,password}
-- POST /api/auth/login {email,password}
-- POST /api/auth/logout
-- GET /api/auth/me
+## API Endpoints
 
-Notes
-- Session is kept in an auth_token httpOnly cookie.
+| Method | Endpoint | Body | Response |
+|--------|----------|------|----------|
+| POST | /api/auth/signup | {name, email, password} | User object + auth cookie |
+| POST | /api/auth/login | {email, password} | User object + auth cookie |
+| POST | /api/auth/logout | — | {ok: true} |
+| GET | /api/auth/me | — | User object (requires auth) |
 
----
+## Configuration
 
-# Additional info
-This repository contains the Spring Boot authentication backend for the Grocery Go demo.
+Set environment variables for Docker or application.properties:
 
-Contents
-- `src/` â€” Java source (controllers, security, JPA entities)
-- `pom.xml` â€” Maven build file
-- `Dockerfile` â€” builds and runs the Spring Boot fat JAR
-- `k8s-deployment.yaml` â€” sample Kubernetes Deployment + Service
-- `create_sample_user.sql` â€” helper to seed a test user in local MySQL
+``properties
+spring.datasource.url=jdbc:mysql://localhost:3306/groceries
+spring.datasource.username=root
+spring.datasource.password=changeme
+app.jwt.secret=your-secret-key
+app.jwt.expiration-days=7
+app.cors.allowed-origins=http://localhost:5173
+``
 
-Run locally
-You can run the application with Maven or via Docker.
+## Database Schema
 
-With Maven:
-```powershell
-cd backend-spring
-mvn -DskipTests spring-boot:run
-```
+- **users** — user profiles (id, name, email, password_hash)
+- **credentials** — BCrypt password hashes (id, user_id, password_hash)
 
-Using Docker (requires Docker):
-```powershell
-docker build -t groceries-backend:local ./backend-spring
-docker run --rm -p 8080:8080 -e SPRING_DATASOURCE_URL="jdbc:mysql://host.docker.internal:3306/groceries" -e SPRING_DATASOURCE_USERNAME=root -e SPRING_DATASOURCE_PASSWORD=changeme -e APP_JWT_SECRET='change_me' groceries-backend:local
-```
+Schema is automatically created on startup from src/main/resources/schema.sql.
 
-Notes
-- For development the repo seeds a `credentials` table and currently stores plaintext passwords â€” **replace with BCrypt** before production.
-- See the project root `docker-compose.yml` for a ready local stack (frontend + backend + MySQL).
+## Password Security
 
+ **BCrypt hashing** for all passwords  
+ **Never plaintext** in the database  
+ Migration endpoint available for legacy plaintext data
 
+## Kubernetes Deployment
+
+Deploy all services:
+
+``ash
+kubectl apply -f k8s/
+``
+
+Access backend via NodePort at port 30080.
+
+## Security Checklist for Production
+
+- [ ] Use strong, random JWT secret (32+ characters)
+- [ ] Enable HTTPS/TLS on all endpoints
+- [ ] Update CORS origins with actual domain
+- [ ] Restrict or remove /api/auth/migrate-passwords endpoint
+- [ ] Use Kubernetes Secrets for sensitive configuration
+- [ ] Implement rate limiting on authentication endpoints
+- [ ] Enable database encryption at rest
+- [ ] Regular dependency security updates
+
+## Troubleshooting
+
+**Port 8080 in use:**
+``powershell
+netstat -ano | findstr :8080
+``
+
+**Database connection error:**
+- Verify MySQL is running: docker ps | findstr mysql
+- Check connection string in application.properties
+
+**JWT errors:**
+- Ensure auth_token cookie is present
+- Verify JWT secret matches between signup and login
+- Check token expiration (default 7 days)
+
+## Development
+
+``powershell
+mvn test                # Run unit tests
+mvn clean package       # Build JAR
+``
+
+## Key Dependencies
+
+- Spring Boot 3.3.5
+- Spring Security 6.x with JWT
+- Spring Data JPA / Hibernate
+- MySQL Connector 8.3
+- JJWT 0.11.5 (JWT signing/parsing)
+- BCrypt password encoder
+
+## Files
+
+- src/ — Java source (auth controller, security, entities)
+- pom.xml — Maven dependencies
+- Dockerfile — Multi-stage production build
+- schema.sql — Database schema
+- application.properties — Spring configuration
